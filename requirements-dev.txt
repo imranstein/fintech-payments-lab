@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest
+testcontainers[postgres]
+httpx2
+ruff
