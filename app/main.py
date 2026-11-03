@@ -53,9 +53,12 @@ def create_payment(
     if existing:
         return replay(existing, body_hash)
 
-    order = db.get(Order, payload.order_id)
+    # FOR NO KEY UPDATE serialises payments for one order without blocking the payments FK insert
+    order = db.get(Order, payload.order_id, with_for_update={"key_share": True})
     if order is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found")
+    if order.status == "PAID":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Order is already paid")
 
     # ponytail: two racing requests can both reach charge(); harmless for the deterministic mock,
     # a real provider needs the key forwarded as its own idempotency key.

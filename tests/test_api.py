@@ -72,6 +72,33 @@ def test_same_key_different_body_conflicts(client, order):
     assert pay(client, other["id"], key).status_code == 409
 
 
+def test_paid_order_rejects_new_key(client, db, order):
+    from app.models import Payment
+
+    assert pay(client, order["id"], str(uuid.uuid4())).status_code == 201
+    assert pay(client, order["id"], str(uuid.uuid4())).status_code == 409
+    rows = db.scalar(select(func.count()).select_from(Payment).where(Payment.order_id == uuid.UUID(order["id"])))
+    assert rows == 1
+
+
+def test_concurrent_new_keys_charge_once(client, order, monkeypatch):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app import provider
+
+    real_charge = provider.charge
+
+    def slow_charge(amount_minor, idempotency_key):
+        time.sleep(0.2)
+        return real_charge(amount_minor, idempotency_key)
+
+    monkeypatch.setattr(provider, "charge", slow_charge)
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        codes = sorted(pool.map(lambda _: pay(client, order["id"], str(uuid.uuid4())).status_code, range(5)))
+    assert codes == [201, 409, 409, 409, 409]
+
+
 def test_missing_idempotency_key(client, order):
     r = client.post("/payments", json={"order_id": order["id"]})
     assert r.status_code == 422

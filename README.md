@@ -73,7 +73,9 @@ curl -X POST http://localhost:8050/payments \
 ```
 
 The mock provider in `app/provider.py` has no randomness: amounts above 500000 minor units return `FAILED`, everything
-else returns `SUCCEEDED`. A succeeded payment moves the order to `PAID`.
+else returns `SUCCEEDED`. A succeeded payment moves the order to `PAID`. Paying an order that is already `PAID`
+with a new key returns 409, so an order is never charged twice. A `FAILED` payment leaves the order unpaid, so it can
+be retried with a new key.
 
 ### GET /payments/{id}
 
